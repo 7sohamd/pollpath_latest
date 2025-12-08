@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
-import { Search, TrendingUp, Clock, Filter, Sparkles, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, TrendingUp, Clock, Filter, Sparkles, ArrowRight, ChevronDown } from 'lucide-react';
 import { motion } from 'framer-motion';
 import PollCard from './ui/PollCard';
 import PollModal from './PollModal';
 import Button from './ui/Button';
 import { Poll } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { pollService } from '../services/pollService';
+import AuthModal from './AuthModal';
+import toast from 'react-hot-toast';
 
 // Mock Data for Explore
 const INITIAL_MOCK_POLLS: Poll[] = [
@@ -97,54 +101,124 @@ const INITIAL_MOCK_POLLS: Poll[] = [
 
 interface ExplorePollsProps {
   onCreate: () => void;
+  sharedPollId?: string | null;
 }
 
-const ExplorePolls: React.FC<ExplorePollsProps> = ({ onCreate }) => {
-  const [polls, setPolls] = useState<Poll[]>(INITIAL_MOCK_POLLS);
+const ExplorePolls: React.FC<ExplorePollsProps> = ({ onCreate, sharedPollId }) => {
+  const [polls, setPolls] = useState<Poll[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'trending' | 'newest' | 'closing'>('trending');
   const [searchQuery, setSearchQuery] = useState('');
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+  const { user } = useAuth();
 
   // Voting Modal State
   const [selectedPoll, setSelectedPoll] = useState<Poll | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Voting Logic
-  const handleVote = (pollId: string, optionIndex: number) => {
-    const updatedPolls = polls.map(poll => {
-      if (poll.id === pollId) {
-        const newOptions = [...poll.options];
-        newOptions[optionIndex] = {
-          ...newOptions[optionIndex],
-          votesCount: newOptions[optionIndex].votesCount + 1
-        };
-        return {
-          ...poll,
-          options: newOptions,
-          totalVotes: poll.totalVotes + 1
-        };
+  // Fetch polls from Firestore on mount
+  useEffect(() => {
+    const fetchPolls = async () => {
+      try {
+        const fetchedPolls = await pollService.getPolls();
+        setPolls(fetchedPolls);
+      } catch (error) {
+        console.error('Error fetching polls:', error);
+      } finally {
+        setLoading(false);
       }
-      return poll;
-    });
+    };
 
-    setPolls(updatedPolls);
+    fetchPolls();
+  }, []);
 
-    // Update the currently selected poll in the modal to reflect the vote immediately
-    if (selectedPoll && selectedPoll.id === pollId) {
-      const updatedPoll = updatedPolls.find(p => p.id === pollId);
-      if (updatedPoll) setSelectedPoll(updatedPoll);
+  // Scroll detection for compact search bar
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 100);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Handle shared poll link - auto-open poll modal
+  useEffect(() => {
+    if (sharedPollId && polls.length > 0) {
+      const poll = polls.find(p => p.id === sharedPollId);
+      if (poll) {
+        setSelectedPoll(poll);
+        setIsModalOpen(true);
+      }
+    }
+  }, [sharedPollId, polls]);
+
+  // Voting Logic
+  const handleVote = async (pollId: string, optionIndex: number): Promise<void> => {
+    // Check authentication
+    if (!user) {
+      setAuthModalOpen(true);
+      return;
+    }
+
+    try {
+      // Update Firestore
+      await pollService.votePoll(pollId, optionIndex, user.uid);
+
+      // Update local state
+      const freshPolls = await pollService.getPolls();
+      console.log('[ExplorePolls] Refetched polls', freshPolls.find(p => p.id === pollId)?.voters);
+      setPolls(freshPolls);
+      // Update the currently selected poll in the modal
+      if (selectedPoll && selectedPoll.id === pollId) {
+        const updatedPoll = freshPolls.find(p => p.id === pollId);
+        if (updatedPoll) {
+          console.log('[ExplorePolls] Updating modal with fresh poll');
+          setSelectedPoll(updatedPoll);
+        }
+      }
+      toast.success('Vote recorded!');
+    } catch (error) {
+      console.error('Error voting:', error);
+      alert('Failed to vote. Please try again.');
     }
   };
 
+  const handleDelete = async (pollId: string) => {
+    // Refresh polls after deletion
+    const updatedPolls = await pollService.getPolls();
+    setPolls(updatedPolls);
+  };
   const openPoll = (poll: Poll) => {
+    // Check if user is authenticated before opening modal
+    if (!user) {
+      setAuthModalOpen(true);
+      return;
+    }
     setSelectedPoll(poll);
     setIsModalOpen(true);
   };
 
-  // Filter Logic (Mock)
+  // Filter Logic
   const displayedPolls = polls.filter(p =>
     p.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-brand-50 pt-32 pb-20 px-4 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-brand-900 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-500">Loading polls...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-brand-50 pt-32 pb-20 px-4 sm:px-6 lg:px-8">
@@ -171,37 +245,84 @@ const ExplorePolls: React.FC<ExplorePollsProps> = ({ onCreate }) => {
         </div>
 
         {/* Search & Filter Toolbar */}
-        <div className="flex flex-col md:flex-row gap-4 justify-between items-center mb-16 bg-white p-2 rounded-2xl shadow-sm border border-gray-200 sticky top-24 z-30">
-          <div className="relative w-full md:w-96">
+        <div
+          className={`flex flex-col md:flex-row gap-4 items-center mb-16 p-2 rounded-2xl shadow-sm border sticky top-6 z-30 transition-all duration-500 ease-in-out ${isScrolled
+            ? 'bg-white/70 backdrop-blur-xl border-white/20 max-w-md mx-auto w-full'
+            : 'bg-white border-gray-200 justify-between max-w-2xl mx-auto w-full'
+            } ${isSearchFocused && isScrolled ? 'bg-white/95 backdrop-blur-2xl' : ''}`}
+        >
+          <div
+            className={`relative w-full transition-all duration-500 ease-in-out`}
+          >
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
               placeholder="Search polls, tags, or topics..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-transparent focus:bg-gray-50 focus:outline-none text-sm transition-colors text-gray-900 placeholder:text-gray-400"
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
+              className={`w-full pl-10 pr-4 py-2.5 rounded-xl focus:outline-none text-sm transition-all duration-300 text-gray-900 placeholder:text-gray-400 ${isScrolled
+                ? 'bg-white/50 focus:bg-white/100'
+                : 'bg-transparent focus:bg-gray-50'
+                }`}
             />
           </div>
 
-          <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 no-scrollbar">
-            {[
-              { id: 'trending', label: 'Trending', icon: TrendingUp },
-              { id: 'newest', label: 'Newest', icon: Sparkles },
-              { id: 'closing', label: 'Closing Soon', icon: Clock }
-            ].map((f) => (
+
+          {/* Filter Dropdown - Hidden when scrolled */}
+          {!isScrolled && (
+            <div className="relative">
               <button
-                key={f.id}
-                onClick={() => setFilter(f.id as any)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${filter === f.id
-                    ? 'bg-brand-900 text-white shadow-md'
-                    : 'text-gray-600 hover:bg-gray-100'
-                  }`}
+                onClick={() => setIsFilterOpen(!isFilterOpen)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/50 hover:bg-white/80 border border-gray-200 text-sm font-medium text-gray-700 transition-all"
               >
-                <f.icon size={14} />
-                {f.label}
+                {filter === 'trending' && <TrendingUp size={18} />}
+                {filter === 'newest' && <Sparkles size={18} />}
+                {filter === 'closing' && <Clock size={18} />}
+                <ChevronDown size={16} className={`transition-transform duration-200 ${isFilterOpen ? 'rotate-180' : ''}`} />
               </button>
-            ))}
-          </div>
+
+              {/* Dropdown Menu */}
+              {isFilterOpen && (
+                <>
+                  {/* Backdrop to close dropdown */}
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setIsFilterOpen(false)}
+                  />
+
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden z-20"
+                  >
+                    {[
+                      { id: 'trending', label: 'Trending', icon: TrendingUp },
+                      { id: 'newest', label: 'Newest', icon: Sparkles },
+                      { id: 'closing', label: 'Closing Soon', icon: Clock }
+                    ].map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => {
+                          setFilter(f.id as any);
+                          setIsFilterOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors ${filter === f.id
+                          ? 'bg-brand-900 text-white'
+                          : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                      >
+                        <f.icon size={16} />
+                        {f.label}
+                      </button>
+                    ))}
+                  </motion.div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Trending Section */}
@@ -275,7 +396,10 @@ const ExplorePolls: React.FC<ExplorePollsProps> = ({ onCreate }) => {
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           onVote={handleVote}
+          onDelete={handleDelete}
         />
+
+        <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
 
       </div>
     </div>

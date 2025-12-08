@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Calendar, MapPin, Palette, Utensils, GraduationCap, Image as ImageIcon, X, Lightbulb, CheckCircle2 } from 'lucide-react';
 import Button from './ui/Button';
@@ -299,35 +299,6 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
                       </div>
 
                       <div className="space-y-3">
-                        <label className="block text-sm font-medium text-gray-700 ml-1">Post Anonymously</label>
-                        <button
-                          type="button"
-                          onClick={() => setFormData({ 
-                            ...formData, 
-                            identity: formData.identity === 'anonymous' ? 'named' : 'anonymous' 
-                          })}
-                          className={`w-full p-3.5 rounded-xl border-2 transition-all flex items-center justify-between ${
-                            formData.identity === 'anonymous'
-                              ? 'bg-brand-900 border-brand-900 text-white'
-                              : 'bg-gray-50 border-gray-200 text-gray-700 hover:border-gray-300'
-                          }`}
-                        >
-                          <span className="text-sm font-medium">
-                            {formData.identity === 'anonymous' ? 'Anonymous' : 'Show my name'}
-                          </span>
-                          <div className={`w-12 h-6 rounded-full transition-all relative ${
-                            formData.identity === 'anonymous' ? 'bg-white/20' : 'bg-gray-300'
-                          }`}>
-                            <div className={`absolute top-0.5 w-5 h-5 rounded-full transition-all ${
-                              formData.identity === 'anonymous' 
-                                ? 'right-0.5 bg-white' 
-                                : 'left-0.5 bg-white'
-                            }`} />
-                          </div>
-                        </button>
-                      </div>
-
-                      <div className="space-y-3 md:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 ml-1">Visibility</label>
                         <div className="relative">
                           <select

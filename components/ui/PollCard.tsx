@@ -10,8 +10,7 @@ interface PollCardProps {
 }
 
 const PollCard: React.FC<PollCardProps> = ({ poll, onClick, onVote }) => {
-  const [hasVoted, setHasVoted] = useState(false);
-  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  
 
   // Calculate relative time or closing status mock
   const isClosed = poll.status === 'closed';
@@ -25,12 +24,9 @@ const PollCard: React.FC<PollCardProps> = ({ poll, onClick, onVote }) => {
 
   const handleOptionClick = (e: React.MouseEvent, index: number) => {
     e.stopPropagation(); // Prevent card click
-    if (hasVoted || isClosed) return;
-
-    setSelectedOption(index);
-    setHasVoted(true);
-    if (onVote) {
-      onVote(index);
+    // Don't allow voting from card - open modal instead
+    if (onClick) {
+      onClick();
     }
   };
 
@@ -69,16 +65,14 @@ const PollCard: React.FC<PollCardProps> = ({ poll, onClick, onVote }) => {
         <div className="space-y-3 mb-6 flex-1">
           {poll.options.slice(0, 3).map((opt, idx) => {
             const percent = getPercentage(opt.votesCount);
-            const isSelected = selectedOption === idx;
-
+            
             return (
               <div
                 key={idx}
-                className={`relative cursor-pointer group/option`}
-                onClick={(e) => handleOptionClick(e, idx)}
+                className="relative group/option"
               >
                 <div className="flex justify-between text-sm mb-1 text-gray-600 relative z-10">
-                  <span className={`truncate pr-2 font-medium ${isSelected ? 'text-brand-900' : ''}`}>
+                  <span className={`truncate pr-2 font-medium `}>
                     {opt.label}
                   </span>
                   <span className="font-medium text-gray-900 shrink-0">{percent}%</span>
@@ -89,7 +83,7 @@ const PollCard: React.FC<PollCardProps> = ({ poll, onClick, onVote }) => {
                     initial={{ width: 0 }}
                     animate={{ width: `${percent}%` }}
                     transition={{ duration: 1, ease: "easeOut" }}
-                    className={`h-full rounded-full ${isSelected ? 'bg-brand-900' : 'bg-brand-900/70 group-hover/option:bg-brand-900'}`}
+                    className={`h-full rounded-full bg-brand-900/70 group-hover/option:bg-brand-900`}
                   />
                 </div>
               </div>
@@ -106,7 +100,7 @@ const PollCard: React.FC<PollCardProps> = ({ poll, onClick, onVote }) => {
         <div className="flex items-center justify-between pt-4 border-t border-gray-50 mt-auto cursor-default">
           <div className="flex items-center gap-2 text-xs text-gray-500">
             <User size={12} />
-            <span>{poll.identity === 'anonymous' ? 'Anonymous' : 'Named Creator'}</span>
+            <span>{poll.identity === 'anonymous' ? 'Anonymous' : (poll.creatorName || 'User')}</span>
           </div>
           <div className="flex items-center gap-1.5 text-xs font-medium text-gray-600">
             <BarChart2 size={12} />

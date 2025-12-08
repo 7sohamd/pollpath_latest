@@ -48,11 +48,17 @@ export interface Poll {
   status: 'draft' | 'published' | 'closed';
   createdAt: any;
   updatedAt: any;
+  // Creator information
+  creatorId?: string;
+  creatorName?: string;
+  creatorEmail?: string;
+  // Voting tracking: voters[optionIndex] = array of user IDs
+  voters?: { [optionIndex: number]: string[] };
 }
 
 export interface PollTemplate {
   name: string;
   description: string;
-  icon: any; 
+  icon: any;
   data: Partial<Poll>;
 }
