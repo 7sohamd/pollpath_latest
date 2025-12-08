@@ -84,7 +84,7 @@ const Hero: React.FC<HeroProps> = ({ onGetStarted }) => {
           <Button
             size="lg"
             onClick={onGetStarted}
-            className="px-8 py-4 text-lg bg-brand-900 hover:bg-black text-white border-0 rounded-xl group shadow-[0_1px_2px_rgba(0,0,0,0.05),0_4px_8px_rgba(0,0,0,0.1),0_8px_16px_rgba(0,0,0,0.1),0_16px_32px_rgba(0,0,0,0.05)] hover:shadow-[0_2px_4px_rgba(0,0,0,0.05),0_8px_16px_rgba(0,0,0,0.15),0_16px_32px_rgba(0,0,0,0.15),0_24px_48px_rgba(0,0,0,0.1)] transition-shadow duration-300"
+            className="px-8 py-4 text-lg bg-brand-900 hover:bg-black text-white border-0 rounded-xl group shadow-[0_-2px_4px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.05),0_4px_8px_rgba(0,0,0,0.1),0_8px_16px_rgba(0,0,0,0.1),0_16px_32px_rgba(0,0,0,0.05)] hover:shadow-[0_-3px_6px_rgba(0,0,0,0.15),0_2px_4px_rgba(0,0,0,0.05),0_8px_16px_rgba(0,0,0,0.15),0_16px_32px_rgba(0,0,0,0.15),0_24px_48px_rgba(0,0,0,0.1)] transition-shadow duration-300"
           >
             Create Poll
             <ArrowUpRight className="ml-2 w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
