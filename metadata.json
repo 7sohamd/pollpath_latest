@@ -1,0 +1,5 @@
+{
+  "name": "PollPath",
+  "description": "A public polling app marketing website where anyone can post a question and get community votes.",
+  "requestFramePermissions": []
+}
