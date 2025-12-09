@@ -62,3 +62,51 @@ export interface PollTemplate {
   icon: any;
   data: Partial<Poll>;
 }
+
+// --- AI Copilot Types ---
+
+export interface SuggestedPoll {
+  question: string;
+  options: string[];
+  suggestedTags: string[];
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'ai';
+  content: string;
+  timestamp: Date;
+  pollCards?: MiniPollData[];
+  actionSuggestions?: ActionSuggestion[];
+  suggestedPoll?: SuggestedPoll;
+}
+
+export interface MiniPollData {
+  id: string;
+  question: string;
+  options: {
+    label: string;
+    votesCount: number;
+    percentage: number;
+  }[];
+  totalVotes: number;
+  tags: string[];
+}
+
+export interface CopilotResponse {
+  text: string;
+  pollCards: MiniPollData[];
+  actionSuggestions: ActionSuggestion[];
+  suggestedPoll?: SuggestedPoll;
+}
+
+export interface ActionSuggestion {
+  type: 'createPoll' | 'openPoll' | 'createPollInChat';
+  label: string;
+  payload: {
+    question?: string;
+    options?: string[];
+    suggestedTags?: string[];
+    pollId?: string;
+  };
+}

@@ -6,9 +6,13 @@ import { FooterSection } from './components/Footer';
 import ScrollBlur from './components/ScrollBlur';
 import CreatePoll from './components/CreatePoll';
 import ExplorePolls from './components/ExplorePolls';
+import FloatingChatButton from './components/FloatingChatButton';
+import ChatPanel from './components/ChatPanel';
+import PollModal from './components/PollModal';
 import { AuthProvider } from './contexts/AuthContext';
 import { Poll } from './types';
 import { Toaster } from 'react-hot-toast';
+import { pollService } from './services/pollService';
 
 // Define available views
 type View = 'home' | 'create' | 'explore';
@@ -16,6 +20,13 @@ type View = 'home' | 'create' | 'explore';
 function App() {
   const [currentView, setCurrentView] = useState<View>('home');
   const [sharedPollId, setSharedPollId] = useState<string | null>(null);
+
+  // Chat state
+  const [isChatOpen, setIsChatOpen] = useState(false);
+
+  // Poll modal state (for chat integration)
+  const [chatSelectedPoll, setChatSelectedPoll] = useState<Poll | null>(null);
+  const [isChatPollModalOpen, setIsChatPollModalOpen] = useState(false);
 
   // Handle URL query parameters for shared poll links
   useEffect(() => {
@@ -37,6 +48,38 @@ function App() {
   const handlePublishPoll = (poll: Poll) => {
     console.log("Publishing Poll:", poll);
     navigateTo('explore'); // Navigate to explore page after creation
+  };
+
+  // Handler for when AI chat wants to show a poll
+  const handleChatViewPoll = async (pollId: string) => {
+    try {
+      // Fetch the poll from Firestore
+      const polls = await pollService.getPolls();
+      const poll = polls.find(p => p.id === pollId);
+
+      if (poll) {
+        setChatSelectedPoll(poll);
+        setIsChatPollModalOpen(true);
+      }
+    } catch (error) {
+      console.error('Error fetching poll for chat:', error);
+    }
+  };
+
+  // Handler for voting from chat-opened poll modal
+  const handleChatPollVote = async (pollId: string, optionIndex: number) => {
+    try {
+      const user = null; // Get from auth context if needed
+      // The actual voting logic is handled by PollModal internally
+      // Just refresh the poll data after vote
+      const polls = await pollService.getPolls();
+      const updatedPoll = polls.find(p => p.id === pollId);
+      if (updatedPoll) {
+        setChatSelectedPoll(updatedPoll);
+      }
+    } catch (error) {
+      console.error('Error voting in chat poll:', error);
+    }
   };
 
   return (
@@ -69,6 +112,27 @@ function App() {
 
         <ScrollBlur />
         <Toaster position="top-right" />
+
+        {/* AI Copilot Chat */}
+        <FloatingChatButton
+          onClick={() => setIsChatOpen(true)}
+          isOpen={isChatOpen}
+        />
+        <ChatPanel
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+          onViewPoll={handleChatViewPoll}
+          onNavigate={navigateTo}
+          pageContext={{ route: currentView }}
+        />
+
+        {/* Poll modal for chat-opened polls */}
+        <PollModal
+          poll={chatSelectedPoll}
+          isOpen={isChatPollModalOpen}
+          onClose={() => setIsChatPollModalOpen(false)}
+          onVote={handleChatPollVote}
+        />
       </div>
     </AuthProvider>
   );
