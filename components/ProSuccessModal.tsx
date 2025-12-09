@@ -13,7 +13,6 @@ const ProSuccessModal: React.FC<ProSuccessModalProps> = ({ isOpen, onClose }) =>
         <AnimatePresence>
             {isOpen && (
                 <>
-                    {/* Backdrop */}
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
