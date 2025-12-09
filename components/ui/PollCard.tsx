@@ -10,7 +10,7 @@ interface PollCardProps {
 }
 
 const PollCard: React.FC<PollCardProps> = ({ poll, onClick, onVote }) => {
-  
+
 
   // Calculate relative time or closing status mock
   const isClosed = poll.status === 'closed';
@@ -57,7 +57,7 @@ const PollCard: React.FC<PollCardProps> = ({ poll, onClick, onVote }) => {
         </div>
 
         {/* Question */}
-        <h3 className="text-lg font-semibold text-brand-900 mb-4 leading-tight group-hover:text-brand-900 transition-colors line-clamp-2 cursor-pointer">
+        <h3 className="text-lg font-serif font-semibold text-brand-900 mb-4 leading-tight group-hover:text-brand-900 transition-colors line-clamp-2 cursor-pointer">
           {poll.question}
         </h3>
 
@@ -65,7 +65,7 @@ const PollCard: React.FC<PollCardProps> = ({ poll, onClick, onVote }) => {
         <div className="space-y-3 mb-6 flex-1">
           {poll.options.slice(0, 3).map((opt, idx) => {
             const percent = getPercentage(opt.votesCount);
-            
+
             return (
               <div
                 key={idx}

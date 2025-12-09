@@ -70,9 +70,9 @@ const Hero: React.FC<HeroProps> = ({ onGetStarted }) => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.6, delay: 0.4 }}
-          className="text-gray-500 text-lg md:text-xl max-w-xl mx-auto mb-10 font-light"
+          className="text-gray-900 text-lg md:text-xl max-w-xl mx-auto mb-10 font-light"
         >
-          Build AI super intelligence with PollPath. Let the crowd decide your next move.
+          Reading through Quora is boring. Build AI super intelligence with PollPath. Let the crowd decide your next move.
         </motion.p>
 
         {/* 4. CTA */}
