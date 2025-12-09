@@ -22,6 +22,7 @@ const Hero: React.FC<HeroProps> = ({ onGetStarted }) => {
           preload="auto"
           className="absolute inset-0 w-full h-full object-cover"
         >
+        {/* soham */}
           <source src="/hero.mp4" type="video/mp4" />
         </video>
         {/* Overlay for readability */}
