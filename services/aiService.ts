@@ -1,6 +1,6 @@
 import { CopilotResponse, ChatMessage } from '../types';
 
-// Use localhost for development, relative path for production (Vercel)
+// Use Express server on localhost:3001 for development, Vercel serverless for production
 const API_BASE_URL = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
 export const aiService = {

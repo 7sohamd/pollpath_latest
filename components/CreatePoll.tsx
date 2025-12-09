@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Calendar, MapPin, Palette, Utensils, GraduationCap, Image as ImageIcon, X, Lightbulb, CheckCircle2 } from 'lucide-react';
 import Button from './ui/Button';
 import { Poll, PollTemplate, PollOption } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,54 +8,13 @@ import AuthModal from './AuthModal';
 import ProPaywallModal from './ProPaywallModal';
 import ProSuccessModal from './ProSuccessModal';
 import toast from 'react-hot-toast';
-
-// Mock Templates Data
-const TEMPLATES: PollTemplate[] = [
-  {
-    name: "City Move",
-    description: "Decide your next destination.",
-    icon: MapPin,
-    data: {
-      question: "Which city should I move to?",
-      type: 'single',
-      options: [{ label: "Hyderabad", votesCount: 0 }, { label: "Pune", votesCount: 0 }, { label: "Bangalore", votesCount: 0 }],
-      tags: ["travel", "life"],
-    }
-  },
-  {
-    name: "Logo Feedback",
-    description: "A/B test your designs.",
-    icon: Palette,
-    data: {
-      question: "Which logo concept fits better?",
-      type: 'single',
-      options: [{ label: "Concept A (Minimal)", votesCount: 0 }, { label: "Concept B (Bold)", votesCount: 0 }],
-      tags: ["design", "branding"],
-    }
-  },
-  {
-    name: "Lunch Poll",
-    description: "Settle the food debate.",
-    icon: Utensils,
-    data: {
-      question: "What should we order for lunch?",
-      type: 'multiple',
-      options: [{ label: "Pizza", votesCount: 0 }, { label: "Biryani", votesCount: 0 }, { label: "Sushi", votesCount: 0 }],
-      tags: ["food", "fun"],
-    }
-  },
-  {
-    name: "Event Theme",
-    description: "Pick a vibe for the party.",
-    icon: GraduationCap,
-    data: {
-      question: "Theme for the college fest?",
-      type: 'single',
-      options: [{ label: "Neon Night", votesCount: 0 }, { label: "Bollywood Retro", votesCount: 0 }, { label: "Masquerade", votesCount: 0 }],
-      tags: ["events", "college"],
-    }
-  }
-];
+import { POLL_TEMPLATES } from '../constants/pollTemplates';
+import { DEFAULT_POLL_FORM, INPUT_BASE_CLASSES } from '../constants/pollDefaults';
+import PollTemplateCard from './CreatePoll/PollTemplateCard';
+import CreatePollTabs from './CreatePoll/CreatePollTabs';
+import PollFormFields from './CreatePoll/PollFormFields';
+import PollSettingsGrid from './CreatePoll/PollSettingsGrid';
+import PollPreview from './CreatePoll/PollPreview';
 
 interface CreatePollProps {
   onPublish: (poll: Poll) => void;
@@ -73,54 +31,25 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
   const { user, isPro } = useAuth();
   const [durationHours, setDurationHours] = useState(24);
 
-  // Debug: Log isPro changes
-  React.useEffect(() => {
-    console.log('CreatePoll: isPro changed to:', isPro);
-  }, [isPro]);
-
   // Form State
-  const [formData, setFormData] = useState<Partial<Poll>>({
-    question: '',
-    type: 'single',
-    options: [{ label: '', votesCount: 0 }, { label: '', votesCount: 0 }],
-    visibility: 'public',
-    identity: 'named', // Changed from 'anonymous'
-    voters: {}, // Add vote tracking
-    allowComments: true,
-    resultsVisibility: 'always',
-    tags: [],
-    totalVotes: 0,
-    status: 'published'
-  });
+  const [formData, setFormData] = useState<Partial<Poll>>(DEFAULT_POLL_FORM);
 
-  // Helper to update options
-  const updateOption = (index: number, value: string) => {
-    const newOptions = [...(formData.options || [])];
-    newOptions[index] = { ...newOptions[index], label: value };
-    setFormData({ ...formData, options: newOptions });
-  };
-
-  const addOption = () => {
-    setFormData({
-      ...formData,
-      options: [...(formData.options || []), { label: '', votesCount: 0 }]
-    });
-  };
-
-  const removeOption = (index: number) => {
-    if ((formData.options?.length || 0) <= 2) return;
-    const newOptions = (formData.options || []).filter((_, i) => i !== index);
-    setFormData({ ...formData, options: newOptions });
+  const updateFormData = (updates: Partial<Poll>) => {
+    setFormData({ ...formData, ...updates });
   };
 
   const handleTemplateSelect = (template: PollTemplate) => {
     setFormData({
       ...formData,
       ...template.data,
-      // Ensure strictly typed options
       options: template.data.options as PollOption[]
     });
     setActiveTab('scratch');
+  };
+
+  const handlePaywallTrigger = (feature: 'unlisted' | 'extended-duration') => {
+    setPaywallFeature(feature);
+    setProPaywallOpen(true);
   };
 
   const handleSubmit = async (status: 'published' | 'draft') => {
@@ -145,17 +74,15 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
         status,
         updatedAt: new Date(),
         closesAt,
-        // Add creator information
         creatorId: user.uid,
         creatorName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
         creatorEmail: user.email || '',
-        voters: {}, // Initialize empty voters
-        ownerIsPro: isPro, // Track owner Pro status
+        voters: {},
+        ownerIsPro: isPro,
       };
 
       // Save to Firestore
       const pollId = await pollService.createPoll(finalPoll, user.uid);
-      // Show success toast
       toast.success('Poll created successfully!');
 
       // Call parent callback
@@ -168,12 +95,20 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
     }
   };
 
-  // Uniform input styles for light mode consistency
-  const inputBaseClasses = "w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-900/5 focus:border-brand-900 outline-none transition-all text-sm text-gray-900 placeholder:text-gray-400";
-
   return (
-    <div className="min-h-screen bg-brand-50 pt-28 pb-20 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto">
+    <div
+      className="min-h-screen pt-28 pb-20 px-4 sm:px-6 lg:px-8 relative"
+      style={{
+        backgroundImage: 'url(https://images.unsplash.com/photo-1504253163759-c23fccaebb55?q=80&w=1740&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'top center',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed',
+      }}
+    >
+      {/* Overlay for better readability */}
+ 
+      <div className="max-w-6xl mx-auto relative z-10">
 
         {/* Header */}
         <div className="text-center mb-12">
@@ -184,28 +119,7 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex justify-center mb-10">
-          <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-200 inline-flex">
-            <button
-              onClick={() => setActiveTab('templates')}
-              className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'templates'
-                ? 'bg-brand-900 text-white shadow-md'
-                : 'text-gray-500 hover:text-brand-900 hover:bg-gray-50'
-                }`}
-            >
-              Templates
-            </button>
-            <button
-              onClick={() => setActiveTab('scratch')}
-              className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'scratch'
-                ? 'bg-brand-900 text-white shadow-md'
-                : 'text-gray-500 hover:text-brand-900 hover:bg-gray-50'
-                }`}
-            >
-              Start from scratch
-            </button>
-          </div>
-        </div>
+        <CreatePollTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
         {/* Content Area */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -221,22 +135,12 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
                   exit={{ opacity: 0, y: -10 }}
                   className="grid grid-cols-1 md:grid-cols-2 gap-6"
                 >
-                  {TEMPLATES.map((t, i) => (
-                    <div key={i} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 group">
-                      <div className="w-10 h-10 bg-brand-50 rounded-full flex items-center justify-center mb-4 group-hover:bg-brand-900 group-hover:text-white transition-colors">
-                        <t.icon size={20} />
-                      </div>
-                      <h3 className="text-lg font-bold text-gray-900 mb-1">{t.name}</h3>
-                      <p className="text-sm text-gray-500 mb-6">{t.description}</p>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => handleTemplateSelect(t)}
-                      >
-                        Use template
-                      </Button>
-                    </div>
+                  {POLL_TEMPLATES.map((template, i) => (
+                    <PollTemplateCard
+                      key={i}
+                      template={template}
+                      onSelect={handleTemplateSelect}
+                    />
                   ))}
                 </motion.div>
               ) : (
@@ -248,168 +152,23 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
                   className="bg-white rounded-[24px] shadow-sm border border-gray-200 p-8"
                 >
                   <div className="space-y-8">
-                    {/* Question Input */}
-                    <div className="space-y-3">
-                      <label className="block text-sm font-medium text-gray-700 ml-1">Poll Question</label>
-                      <textarea
-                        value={formData.question}
-                        onChange={(e) => setFormData({ ...formData, question: e.target.value })}
-                        placeholder="What would you like to ask?"
-                        className={`${inputBaseClasses} h-32 resize-none text-lg`}
-                      />
-                    </div>
-
-                    {/* Options Input */}
-                    <div className="space-y-4">
-                      <label className="block text-sm font-medium text-gray-700 ml-1">Options</label>
-                      <div className="space-y-3">
-                        {formData.options?.map((opt, i) => (
-                          <div key={i} className="flex gap-3 items-center group">
-                            <div className="flex-1 relative">
-                              <input
-                                type="text"
-                                value={opt.label}
-                                onChange={(e) => updateOption(i, e.target.value)}
-                                placeholder={`Option ${i + 1}`}
-                                className={inputBaseClasses}
-                              />
-                            </div>
-                            {formData.options!.length > 2 && (
-                              <button
-                                onClick={() => removeOption(i)}
-                                className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors border border-transparent hover:border-red-100"
-                              >
-                                <X size={18} />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <button
-                        onClick={addOption}
-                        className="text-sm font-medium text-brand-900 hover:text-blue-600 flex items-center gap-2 transition-colors px-1 py-2"
-                      >
-                        <Plus size={16} /> Add another option
-                      </button>
-                    </div>
+                    {/* Form Fields */}
+                    <PollFormFields
+                      formData={formData}
+                      onUpdate={updateFormData}
+                      inputStyles={INPUT_BASE_CLASSES}
+                    />
 
                     {/* Settings Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-100">
-                      <div className="space-y-3">
-                        <label className="block text-sm font-medium text-gray-700 ml-1">Poll Type</label>
-                        <div className="flex gap-2 bg-gray-50 p-1 rounded-xl border border-gray-200">
-                          {['single', 'multiple', 'rating'].map((type) => (
-                            <button
-                              key={type}
-                              onClick={() => setFormData({ ...formData, type: type as any })}
-                              className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all capitalize ${formData.type === type
-                                ? 'bg-white text-brand-900 shadow-sm border border-gray-100'
-                                : 'text-gray-500 hover:text-gray-900'
-                                }`}
-                            >
-                              {type}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <label className="block text-sm font-medium text-gray-700 ml-1">Post Anonymously</label>
-                        <button
-                          type="button"
-                          onClick={() => setFormData({
-                            ...formData,
-                            identity: formData.identity === 'anonymous' ? 'named' : 'anonymous'
-                          })}
-                          className={`w-full p-3.5 rounded-xl border-2 transition-all flex items-center justify-between ${formData.identity === 'anonymous'
-                            ? 'bg-brand-900 border-brand-900 text-white'
-                            : 'bg-gray-50 border-gray-200 text-gray-700 hover:border-gray-300'
-                            }`}
-                        >
-                          <span className="text-sm font-medium">
-                            {formData.identity === 'anonymous' ? 'Anonymous' : 'Show my name'}
-                          </span>
-                          <div className={`w-12 h-6 rounded-full transition-all relative ${formData.identity === 'anonymous' ? 'bg-white/20' : 'bg-gray-300'
-                            }`}>
-                            <div className={`absolute top-0.5 w-5 h-5 rounded-full transition-all ${formData.identity === 'anonymous'
-                              ? 'right-0.5 bg-white'
-                              : 'left-0.5 bg-white'
-                              }`} />
-                          </div>
-                        </button>
-                      </div>
-
-                      <div className="space-y-3 md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 ml-1">Visibility</label>
-                        <div className="relative">
-                          <select
-                            value={formData.visibility}
-                            onChange={(e) => {
-                              const newVisibility = e.target.value as 'public' | 'unlisted';
-                              // Check if trying to select unlisted without Pro
-                              if (newVisibility === 'unlisted' && !isPro) {
-                                setPaywallFeature('unlisted');
-                                setProPaywallOpen(true);
-                                return;
-                              }
-                              setFormData({ ...formData, visibility: newVisibility });
-                            }}
-                            className={`${inputBaseClasses} appearance-none`}
-                          >
-                            <option value="public">Public (Visible in Explore)</option>
-                            <option value="unlisted">Unlisted (Link only) {!isPro && '🔒 Pro'}</option>
-                          </select>
-                          <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <label className="block text-sm font-medium text-gray-700 ml-1">Tags</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. travel, tech (comma separated)"
-                          value={formData.tags?.join(', ')}
-                          onChange={(e) => setFormData({ ...formData, tags: e.target.value.split(',').map(t => t.trim()) })}
-                          className={inputBaseClasses}
-                        />
-                      </div>
-
-                      <div className="space-y-3">
-                        <label className="block text-sm font-medium text-gray-700 ml-1">
-                          Duration {!isPro && durationHours > 24 && <span className="text-xs text-brand-900 font-bold">🔒 Pro</span>}
-                        </label>
-                        <div className="relative">
-                          <select
-                            value={durationHours}
-                            onChange={(e) => {
-                              const hours = parseInt(e.target.value);
-                              // Check if trying to set duration > 24 hours without Pro
-                              if (hours > 24 && !isPro) {
-                                setPaywallFeature('extended-duration');
-                                setProPaywallOpen(true);
-                                return;
-                              }
-                              setDurationHours(hours);
-                            }}
-                            className={`${inputBaseClasses} appearance-none`}
-                          >
-                            <option value={1}>1 Hour</option>
-                            <option value={6}>6 Hours</option>
-                            <option value={12}>12 Hours</option>
-                            <option value={24}>24 Hours (Free tier max)</option>
-                            <option value={48} disabled={!isPro}>48 Hours {!isPro && '🔒'}</option>
-                            <option value={72} disabled={!isPro}>3 Days {!isPro && '🔒'}</option>
-                            <option value={168} disabled={!isPro}>1 Week {!isPro && '🔒'}</option>
-                            <option value={720} disabled={!isPro}>1 Month {!isPro && '🔒'}</option>
-                          </select>
-                          <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    <PollSettingsGrid
+                      formData={formData}
+                      onUpdate={updateFormData}
+                      isPro={isPro}
+                      durationHours={durationHours}
+                      onDurationChange={setDurationHours}
+                      onPaywallTrigger={handlePaywallTrigger}
+                      inputStyles={INPUT_BASE_CLASSES}
+                    />
 
                     {/* Action Buttons */}
                     <div className="pt-8 flex flex-col-reverse sm:flex-row items-center justify-end gap-4 border-t border-gray-100">
@@ -439,69 +198,7 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
           </div>
 
           {/* Live Preview Panel */}
-          <div className="lg:col-span-4 hidden lg:block">
-            <div className="sticky top-28 space-y-4">
-              <div className="flex items-center justify-between px-1">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Live Preview</span>
-                <div className="flex gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-red-400" />
-                  <div className="w-2 h-2 rounded-full bg-yellow-400" />
-                  <div className="w-2 h-2 rounded-full bg-green-400" />
-                </div>
-              </div>
-
-              <div className="bg-white rounded-[32px] p-6 shadow-2xl shadow-gray-200/50 border border-gray-100 relative overflow-hidden">
-                {/* Decorative bg element */}
-                <div className="absolute -top-10 -right-10 w-32 h-32 bg-brand-50 rounded-full blur-2xl pointer-events-none" />
-
-                <div className="relative z-10">
-                  <div className="flex items-center gap-3 mb-5">
-                    <div className="w-9 h-9 rounded-full bg-brand-900 text-white flex items-center justify-center text-xs font-bold shadow-md">
-                      You
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-gray-900">Your Name</div>
-                      <div className="text-[10px] text-gray-400 font-medium">Just now</div>
-                    </div>
-                    <div className="ml-auto">
-                      <span className="px-2 py-1 bg-gray-100 text-gray-500 text-[10px] font-bold rounded-full uppercase tracking-wide">
-                        {formData.type}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="mb-6">
-                    <h3 className={`text-lg font-serif font-medium text-gray-900 leading-tight ${!formData.question ? 'text-gray-300 italic' : ''}`}>
-                      {formData.question || "Your question will appear here..."}
-                    </h3>
-                  </div>
-
-                  <div className="space-y-2.5">
-                    {formData.options?.map((opt, i) => (
-                      <div key={i} className="group p-3.5 rounded-xl border border-gray-200 bg-gray-50/30 text-sm text-gray-600 flex justify-between items-center hover:border-gray-300 transition-colors cursor-default">
-                        <span>{opt.label || `Option ${i + 1}`}</span>
-                        <div className="w-4 h-4 rounded-full border-2 border-gray-300 group-hover:border-gray-400" />
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-6 pt-4 border-t border-gray-50 flex justify-between items-center text-xs text-gray-400 font-medium">
-                    <span>0 Votes</span>
-                    <span className="flex items-center gap-1"><Calendar size={10} /> Ends in 24h</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 flex gap-3 items-start">
-                <div className="mt-0.5 p-1 bg-blue-100 rounded-full text-blue-600">
-                  <Lightbulb size={14} />
-                </div>
-                <p className="text-xs text-blue-900/70 leading-relaxed">
-                  <strong>Pro Tip:</strong> Short, clear questions get 30% more engagement. Try adding a relevant image to boost visibility.
-                </p>
-              </div>
-            </div>
-          </div>
+          <PollPreview formData={formData} />
 
         </div>
       </div>
