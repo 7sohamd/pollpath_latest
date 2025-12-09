@@ -6,9 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "server": "node server.js",
-    "dev:all": "concurrently \"npm run dev\" \"npm run server\" --names \"frontend,backend\" --prefix-colors \"cyan,magenta\""
+    "preview": "vite preview"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -20,7 +18,9 @@
     "firebase-admin": "^13.6.0",
     "framer-motion": "^12.23.25",
     "lucide-react": "^0.556.0",
+    "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2",
+    "razorpay": "^2.9.6",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-hot-toast": "^2.6.0",

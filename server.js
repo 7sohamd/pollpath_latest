@@ -3,6 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import admin from 'firebase-admin';
+import Razorpay from 'razorpay';
+import crypto from 'crypto';
+import cron from 'node-cron';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -17,6 +20,26 @@ app.use(express.json());
 // Initialize Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+// Initialize Razorpay
+let razorpay = null;
+const PRO_PLAN_AMOUNT = parseInt(process.env.PRO_PLAN_AMOUNT || '9900'); // Default: ₹99 in paise
+const PRO_PLAN_CURRENCY = process.env.PRO_PLAN_CURRENCY || 'INR';
+const PRO_PLAN_NAME = process.env.PRO_PLAN_NAME || 'pro-monthly';
+
+try {
+    if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
+        razorpay = new Razorpay({
+            key_id: process.env.RAZORPAY_KEY_ID,
+            key_secret: process.env.RAZORPAY_KEY_SECRET,
+        });
+        console.log('✅ Razorpay initialized successfully');
+    } else {
+        console.log('⚠️  Razorpay credentials not found - payment features will be disabled');
+    }
+} catch (error) {
+    console.error('⚠️  Failed to initialize Razorpay:', error.message);
+}
 
 // Initialize Firebase Admin (optional - only if credentials are provided)
 let db = null;
@@ -424,6 +447,140 @@ Keep responses:
             pollCards: [],
             actionSuggestions: [],
         });
+    }
+});
+
+// ============================================================================
+// RAZORPAY PAYMENT ENDPOINTS
+// ============================================================================
+
+// Create Razorpay order
+app.post('/api/payments/create-order', async (req, res) => {
+    console.log('📨 Received request to /api/payments/create-order');
+
+    try {
+        const { userId } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
+
+        if (!razorpay) {
+            return res.status(503).json({ error: 'Payment service not configured' });
+        }
+
+        const options = {
+            amount: PRO_PLAN_AMOUNT, // amount in smallest currency unit (paise)
+            currency: PRO_PLAN_CURRENCY,
+            receipt: `rcpt_${Date.now()}`, // Shortened to fit 40 char limit
+            notes: {
+                userId,
+                plan: PRO_PLAN_NAME,
+            },
+        };
+
+        const order = await razorpay.orders.create(options);
+
+        console.log(`✅ Created Razorpay order: ${order.id} for user: ${userId}`);
+
+        res.json({
+            orderId: order.id,
+            amount: order.amount,
+            currency: order.currency,
+            keyId: process.env.RAZORPAY_KEY_ID,
+        });
+    } catch (error) {
+        console.error('❌ Error creating Razorpay order:', error);
+        res.status(500).json({ error: 'Failed to create order', message: error.message });
+    }
+});
+
+// Verify Razorpay payment
+app.post('/api/payments/verify', async (req, res) => {
+    console.log('📨 Received request to /api/payments/verify');
+
+    try {
+        const { razorpay_order_id, razorpay_payment_id, razorpay_signature, userId } = req.body;
+
+        if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !userId) {
+            return res.status(400).json({ error: 'Missing required payment data' });
+        }
+
+        if (!db) {
+            return res.status(503).json({ error: 'Database not configured' });
+        }
+
+        // Verify signature
+        const shasum = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET);
+        shasum.update(`${razorpay_order_id}|${razorpay_payment_id}`);
+        const digest = shasum.digest('hex');
+
+        if (digest !== razorpay_signature) {
+            console.error('❌ Payment signature verification failed');
+            return res.status(400).json({ error: 'Invalid payment signature' });
+        }
+
+        console.log(`✅ Payment signature verified for user: ${userId}`);
+
+        // Update user's Pro status in Firestore
+        const userRef = db.collection('users').doc(userId);
+        await userRef.set({
+            isPro: true,
+            proPlan: PRO_PLAN_NAME,
+            proSince: admin.firestore.FieldValue.serverTimestamp(),
+            razorpayPaymentId: razorpay_payment_id,
+            razorpayOrderId: razorpay_order_id,
+            razorpaySignature: razorpay_signature,
+        }, { merge: true });
+
+        console.log(`✅ Updated user ${userId} to Pro status`);
+
+        res.json({ success: true, isPro: true });
+    } catch (error) {
+        console.error('❌ Error verifying payment:', error);
+        res.status(500).json({ error: 'Payment verification failed', message: error.message });
+    }
+});
+
+// ============================================================================
+// AUTO-DELETE FREE TIER POLLS (CRON JOB)
+// ============================================================================
+
+// Run every hour to delete free tier polls older than 24 hours
+cron.schedule('0 * * * *', async () => {
+    console.log('🕒 Running auto-delete cron job for free tier polls...');
+
+    if (!db) {
+        console.log('⚠️  Skipping auto-delete: Firebase not configured');
+        return;
+    }
+
+    try {
+        const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+        const pollsSnapshot = await db.collection('polls')
+            .where('ownerIsPro', '==', false)
+            .where('createdAt', '<=', admin.firestore.Timestamp.fromDate(cutoffTime))
+            .get();
+
+        if (pollsSnapshot.empty) {
+            console.log('✅ No free tier polls to delete');
+            return;
+        }
+
+        const batch = db.batch();
+        let count = 0;
+
+        pollsSnapshot.forEach((doc) => {
+            // Soft delete: set status to 'deleted'
+            batch.update(doc.ref, { status: 'deleted' });
+            count++;
+        });
+
+        await batch.commit();
+        console.log(`✅ Soft-deleted ${count} free tier polls older than 24 hours`);
+    } catch (error) {
+        console.error('❌ Error in auto-delete cron job:', error);
     }
 });
 

@@ -6,6 +6,8 @@ import { Poll, PollTemplate, PollOption } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { pollService } from '../services/pollService';
 import AuthModal from './AuthModal';
+import ProPaywallModal from './ProPaywallModal';
+import ProSuccessModal from './ProSuccessModal';
 import toast from 'react-hot-toast';
 
 // Mock Templates Data
@@ -65,7 +67,16 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
   const [activeTab, setActiveTab] = useState<'templates' | 'scratch'>('templates');
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { user } = useAuth();
+  const [proPaywallOpen, setProPaywallOpen] = useState(false);
+  const [proSuccessOpen, setProSuccessOpen] = useState(false);
+  const [paywallFeature, setPaywallFeature] = useState<'unlisted' | 'extended-duration'>('unlisted');
+  const { user, isPro } = useAuth();
+  const [durationHours, setDurationHours] = useState(24);
+
+  // Debug: Log isPro changes
+  React.useEffect(() => {
+    console.log('CreatePoll: isPro changed to:', isPro);
+  }, [isPro]);
 
   // Form State
   const [formData, setFormData] = useState<Partial<Poll>>({
@@ -126,16 +137,20 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
 
     setIsSubmitting(true);
     try {
+      // Calculate poll close time based on duration
+      const closesAt = new Date(Date.now() + durationHours * 60 * 60 * 1000);
+
       const finalPoll: Omit<Poll, 'id' | 'createdAt'> = {
         ...formData as Omit<Poll, 'id' | 'createdAt'>,
         status,
         updatedAt: new Date(),
-        closesAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        closesAt,
         // Add creator information
         creatorId: user.uid,
         creatorName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
         creatorEmail: user.email || '',
         voters: {}, // Initialize empty voters
+        ownerIsPro: isPro, // Track owner Pro status
       };
 
       // Save to Firestore
@@ -174,8 +189,8 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
             <button
               onClick={() => setActiveTab('templates')}
               className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'templates'
-                  ? 'bg-brand-900 text-white shadow-md'
-                  : 'text-gray-500 hover:text-brand-900 hover:bg-gray-50'
+                ? 'bg-brand-900 text-white shadow-md'
+                : 'text-gray-500 hover:text-brand-900 hover:bg-gray-50'
                 }`}
             >
               Templates
@@ -183,8 +198,8 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
             <button
               onClick={() => setActiveTab('scratch')}
               className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'scratch'
-                  ? 'bg-brand-900 text-white shadow-md'
-                  : 'text-gray-500 hover:text-brand-900 hover:bg-gray-50'
+                ? 'bg-brand-900 text-white shadow-md'
+                : 'text-gray-500 hover:text-brand-900 hover:bg-gray-50'
                 }`}
             >
               Start from scratch
@@ -288,8 +303,8 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
                               key={type}
                               onClick={() => setFormData({ ...formData, type: type as any })}
                               className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all capitalize ${formData.type === type
-                                  ? 'bg-white text-brand-900 shadow-sm border border-gray-100'
-                                  : 'text-gray-500 hover:text-gray-900'
+                                ? 'bg-white text-brand-900 shadow-sm border border-gray-100'
+                                : 'text-gray-500 hover:text-gray-900'
                                 }`}
                             >
                               {type}
@@ -302,27 +317,24 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
                         <label className="block text-sm font-medium text-gray-700 ml-1">Post Anonymously</label>
                         <button
                           type="button"
-                          onClick={() => setFormData({ 
-                            ...formData, 
-                            identity: formData.identity === 'anonymous' ? 'named' : 'anonymous' 
+                          onClick={() => setFormData({
+                            ...formData,
+                            identity: formData.identity === 'anonymous' ? 'named' : 'anonymous'
                           })}
-                          className={`w-full p-3.5 rounded-xl border-2 transition-all flex items-center justify-between ${
-                            formData.identity === 'anonymous'
-                              ? 'bg-brand-900 border-brand-900 text-white'
-                              : 'bg-gray-50 border-gray-200 text-gray-700 hover:border-gray-300'
-                          }`}
+                          className={`w-full p-3.5 rounded-xl border-2 transition-all flex items-center justify-between ${formData.identity === 'anonymous'
+                            ? 'bg-brand-900 border-brand-900 text-white'
+                            : 'bg-gray-50 border-gray-200 text-gray-700 hover:border-gray-300'
+                            }`}
                         >
                           <span className="text-sm font-medium">
                             {formData.identity === 'anonymous' ? 'Anonymous' : 'Show my name'}
                           </span>
-                          <div className={`w-12 h-6 rounded-full transition-all relative ${
-                            formData.identity === 'anonymous' ? 'bg-white/20' : 'bg-gray-300'
-                          }`}>
-                            <div className={`absolute top-0.5 w-5 h-5 rounded-full transition-all ${
-                              formData.identity === 'anonymous' 
-                                ? 'right-0.5 bg-white' 
-                                : 'left-0.5 bg-white'
-                            }`} />
+                          <div className={`w-12 h-6 rounded-full transition-all relative ${formData.identity === 'anonymous' ? 'bg-white/20' : 'bg-gray-300'
+                            }`}>
+                            <div className={`absolute top-0.5 w-5 h-5 rounded-full transition-all ${formData.identity === 'anonymous'
+                              ? 'right-0.5 bg-white'
+                              : 'left-0.5 bg-white'
+                              }`} />
                           </div>
                         </button>
                       </div>
@@ -332,11 +344,20 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
                         <div className="relative">
                           <select
                             value={formData.visibility}
-                            onChange={(e) => setFormData({ ...formData, visibility: e.target.value as any })}
+                            onChange={(e) => {
+                              const newVisibility = e.target.value as 'public' | 'unlisted';
+                              // Check if trying to select unlisted without Pro
+                              if (newVisibility === 'unlisted' && !isPro) {
+                                setPaywallFeature('unlisted');
+                                setProPaywallOpen(true);
+                                return;
+                              }
+                              setFormData({ ...formData, visibility: newVisibility });
+                            }}
                             className={`${inputBaseClasses} appearance-none`}
                           >
                             <option value="public">Public (Visible in Explore)</option>
-                            <option value="unlisted">Unlisted (Link only)</option>
+                            <option value="unlisted">Unlisted (Link only) {!isPro && '🔒 Pro'}</option>
                           </select>
                           <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
@@ -356,10 +377,36 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
                       </div>
 
                       <div className="space-y-3">
-                        <label className="block text-sm font-medium text-gray-700 ml-1">Duration</label>
-                        <div className={`flex items-center gap-2 ${inputBaseClasses} bg-gray-50 text-gray-400 cursor-not-allowed`}>
-                          <Calendar size={16} />
-                          <span>24 Hours (Default)</span>
+                        <label className="block text-sm font-medium text-gray-700 ml-1">
+                          Duration {!isPro && durationHours > 24 && <span className="text-xs text-brand-900 font-bold">🔒 Pro</span>}
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={durationHours}
+                            onChange={(e) => {
+                              const hours = parseInt(e.target.value);
+                              // Check if trying to set duration > 24 hours without Pro
+                              if (hours > 24 && !isPro) {
+                                setPaywallFeature('extended-duration');
+                                setProPaywallOpen(true);
+                                return;
+                              }
+                              setDurationHours(hours);
+                            }}
+                            className={`${inputBaseClasses} appearance-none`}
+                          >
+                            <option value={1}>1 Hour</option>
+                            <option value={6}>6 Hours</option>
+                            <option value={12}>12 Hours</option>
+                            <option value={24}>24 Hours (Free tier max)</option>
+                            <option value={48} disabled={!isPro}>48 Hours {!isPro && '🔒'}</option>
+                            <option value={72} disabled={!isPro}>3 Days {!isPro && '🔒'}</option>
+                            <option value={168} disabled={!isPro}>1 Week {!isPro && '🔒'}</option>
+                            <option value={720} disabled={!isPro}>1 Month {!isPro && '🔒'}</option>
+                          </select>
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -460,6 +507,19 @@ const CreatePoll: React.FC<CreatePollProps> = ({ onPublish, onCancel }) => {
       </div>
 
       <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+      <ProPaywallModal
+        isOpen={proPaywallOpen}
+        onClose={() => setProPaywallOpen(false)}
+        onSuccess={() => {
+          setProPaywallOpen(false);
+          setProSuccessOpen(true);
+        }}
+        feature={paywallFeature}
+      />
+      <ProSuccessModal
+        isOpen={proSuccessOpen}
+        onClose={() => setProSuccessOpen(false)}
+      />
     </div>
   );
 };

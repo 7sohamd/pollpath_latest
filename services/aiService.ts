@@ -1,6 +1,7 @@
 import { CopilotResponse, ChatMessage } from '../types';
 
-const API_BASE_URL = 'http://localhost:3001';
+// Use localhost for development, relative path for production (Vercel)
+const API_BASE_URL = import.meta.env.DEV ? 'http://localhost:3001' : '';
 
 export const aiService = {
     async sendChatMessage(
@@ -35,7 +36,7 @@ export const aiService = {
 
             // Return a fallback response
             return {
-                text: "Sorry, I'm having trouble connecting right now. Please make sure the backend server is running (npm run server) and try again.",
+                text: "Sorry, I'm having trouble connecting right now. Please try again.",
                 pollCards: [],
                 actionSuggestions: [],
             };

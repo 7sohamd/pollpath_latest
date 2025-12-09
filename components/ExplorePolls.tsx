@@ -114,7 +114,7 @@ const ExplorePolls: React.FC<ExplorePollsProps> = ({ onCreate, sharedPollId }) =
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  const { user } = useAuth();
+  const { user, isPro } = useAuth();
 
   // Voting Modal State
   const [selectedPoll, setSelectedPoll] = useState<Poll | null>(null);
@@ -204,7 +204,13 @@ const ExplorePolls: React.FC<ExplorePollsProps> = ({ onCreate, sharedPollId }) =
   };
 
   // Filter Logic
-  const displayedPolls = polls.filter(p =>
+  const publicPolls = polls.filter(p => p.visibility === 'public' && p.status !== 'deleted');
+  const myPrivatePolls = user
+    ? polls.filter(p => p.visibility === 'unlisted' && p.creatorId === user.uid && p.status !== 'deleted')
+    : [];
+
+  // Filter Logic - apply search only to public polls
+  const displayedPolls = publicPolls.filter(p =>
     p.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
   );
@@ -277,6 +283,7 @@ const ExplorePolls: React.FC<ExplorePollsProps> = ({ onCreate, sharedPollId }) =
                 onClick={() => setIsFilterOpen(!isFilterOpen)}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/50 hover:bg-white/80 border border-gray-200 text-sm font-medium text-gray-700 transition-all"
               >
+                
                 {filter === 'trending' && <TrendingUp size={18} />}
                 {filter === 'newest' && <Sparkles size={18} />}
                 {filter === 'closing' && <Clock size={18} />}
@@ -325,6 +332,37 @@ const ExplorePolls: React.FC<ExplorePollsProps> = ({ onCreate, sharedPollId }) =
           )}
         </div>
 
+        {/* My Private Polls Section - Pro Users Only */}
+        {isPro && myPrivatePolls.length > 0 && !searchQuery && (
+          <div className="mb-20">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-1 h-8 bg-purple-600 rounded-full" />
+              <h2 className="text-2xl font-serif font-medium text-brand-900 flex items-center gap-2">
+                My Private Polls
+                <span className="text-xs font-bold px-2 py-1 bg-purple-100 text-purple-700 rounded-full">PRO</span>
+              </h2>
+            </div>
+            <p className="text-sm text-gray-600 mb-6">
+              Your unlisted polls are hidden from Explore. Share the link to let others vote.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {myPrivatePolls.map((poll) => (
+                <div key={poll.id} className="relative">
+                  <div className="absolute -top-2 -right-2 bg-purple-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg z-10">
+                    🔒 Private
+                  </div>
+                  <PollCard
+                    poll={poll}
+                    onClick={() => openPoll(poll)}
+                    onVote={(optionIndex) => handleVote(poll.id, optionIndex)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Trending Section */}
         {filter === 'trending' && !searchQuery && (
           <div className="mb-20">
@@ -334,7 +372,7 @@ const ExplorePolls: React.FC<ExplorePollsProps> = ({ onCreate, sharedPollId }) =
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {polls.slice(0, 3).map((poll) => (
+              {publicPolls.slice(0, 3).map((poll) => (
                 <PollCard
                   key={poll.id}
                   poll={poll}

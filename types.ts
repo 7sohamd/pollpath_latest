@@ -45,7 +45,7 @@ export interface Poll {
   tags: string[];
   imageUrl: string | null;
   totalVotes: number;
-  status: 'draft' | 'published' | 'closed';
+  status: 'draft' | 'published' | 'closed' | 'deleted';
   createdAt: any;
   updatedAt: any;
   // Creator information
@@ -54,6 +54,8 @@ export interface Poll {
   creatorEmail?: string;
   // Voting tracking: voters[optionIndex] = array of user IDs
   voters?: { [optionIndex: number]: string[] };
+  // Pro status tracking
+  ownerIsPro?: boolean;
 }
 
 export interface PollTemplate {
@@ -61,6 +63,31 @@ export interface PollTemplate {
   description: string;
   icon: any;
   data: Partial<Poll>;
+}
+
+// --- Pro Subscription Types ---
+
+export interface UserProData {
+  isPro: boolean;
+  proPlan: string | null;
+  proSince: any; // Timestamp
+  razorpayCustomerId?: string;
+  razorpayPaymentId?: string;
+  razorpayOrderId?: string;
+  razorpaySignature?: string;
+}
+
+export interface RazorpayOrderData {
+  orderId: string;
+  amount: number;
+  currency: string;
+  keyId: string;
+}
+
+export interface RazorpayPaymentData {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
 }
 
 // --- AI Copilot Types ---

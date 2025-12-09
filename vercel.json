@@ -1,0 +1,28 @@
+{
+    "version": 2,
+    "buildCommand": "npm run build",
+    "outputDirectory": "dist",
+    "framework": "vite",
+    "crons": [
+        {
+            "path": "/api/cron/cleanup-polls",
+            "schedule": "0 0 * * *"
+        }
+    ],
+    "env": {
+        "GEMINI_API_KEY": "@gemini_api_key",
+        "VITE_FIREBASE_PROJECT_ID": "@vite_firebase_project_id",
+        "FIREBASE_CLIENT_EMAIL": "@firebase_client_email",
+        "FIREBASE_PRIVATE_KEY": "@firebase_private_key",
+        "RAZORPAY_KEY_ID": "@razorpay_key_id",
+        "RAZORPAY_KEY_SECRET": "@razorpay_key_secret",
+        "PRO_PLAN_AMOUNT": "@pro_plan_amount",
+        "PRO_PLAN_CURRENCY": "@pro_plan_currency",
+        "PRO_PLAN_NAME": "@pro_plan_name"
+    },
+    "functions": {
+        "api/**/*.js": {
+            "maxDuration": 30
+        }
+    }
+}
