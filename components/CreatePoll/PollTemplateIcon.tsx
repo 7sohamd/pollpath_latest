@@ -17,14 +17,14 @@ const PollTemplateIcon: React.FC<PollTemplateIconProps> = ({ templateName }) => 
     switch (templateName) {
         case "City Move":
             return (
-                <div className="relative w-28 h-28 flex items-center justify-center overflow-hidden">
+                <div className="relative w-40 h-40 flex items-center justify-center overflow-hidden">
                     {/* Rotating Globe */}
                     <motion.div
                         animate={{ rotate: 360 }}
                         transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
                         className="text-brand-100"
                     >
-                        <Globe size={80} strokeWidth={1} />
+                        <Globe size={110} strokeWidth={1} />
                     </motion.div>
 
                     {/* Orbiting Plane */}
@@ -37,7 +37,7 @@ const PollTemplateIcon: React.FC<PollTemplateIconProps> = ({ templateName }) => 
                             className="absolute top-2 left-1/2 -translate-x-1/2 text-brand-600"
                             style={{ rotate: 90 }}
                         >
-                            <Plane size={24} strokeWidth={thinStroke} />
+                            <Plane size={32} strokeWidth={thinStroke} />
                         </motion.div>
                     </motion.div>
 
@@ -48,21 +48,21 @@ const PollTemplateIcon: React.FC<PollTemplateIconProps> = ({ templateName }) => 
                         animate={{ y: 0, opacity: 1 }}
                         transition={{ duration: 0.5, delay: 0.5 }}
                     >
-                        <MapPin size={32} className="text-brand-700 drop-shadow-md" strokeWidth={thinStroke} />
+                        <MapPin size={44} className="text-brand-700 drop-shadow-md" strokeWidth={thinStroke} />
                     </motion.div>
                 </div>
             );
 
         case "Logo Feedback":
             return (
-                <div className="relative w-28 h-28 flex items-center justify-center">
+                <div className="relative w-40 h-40 flex items-center justify-center">
                     {/* Option A */}
                     <motion.div
                         className="absolute left-4 top-8 bg-white border border-gray-200 rounded-lg p-2 shadow-sm"
                         animate={{ x: [0, -10, 0], scale: [1, 0.9, 1] }}
                         transition={{ duration: 4, repeat: Infinity }}
                     >
-                        <LayoutTemplate size={24} className="text-gray-400" strokeWidth={thinStroke} />
+                        <LayoutTemplate size={32} className="text-gray-400" strokeWidth={thinStroke} />
                     </motion.div>
 
                     {/* Option B (Selected) */}
@@ -71,13 +71,13 @@ const PollTemplateIcon: React.FC<PollTemplateIconProps> = ({ templateName }) => 
                         animate={{ x: [0, 10, 0], scale: [1, 1.1, 1], borderColor: ["#e5e7eb", "#8b5cf6", "#e5e7eb"] }}
                         transition={{ duration: 4, repeat: Infinity }}
                     >
-                        <LayoutTemplate size={28} className="text-brand-600" strokeWidth={thinStroke} />
+                        <LayoutTemplate size={38} className="text-brand-600" strokeWidth={thinStroke} />
                         <motion.div
                             className="absolute -top-2 -right-2 bg-green-500 rounded-full p-0.5 text-white"
                             animate={{ scale: [0, 1, 0] }}
                             transition={{ duration: 4, repeat: Infinity, times: [0, 0.5, 1] }}
                         >
-                            <Check size={10} strokeWidth={3} />
+                            <Check size={12} strokeWidth={3} />
                         </motion.div>
                     </motion.div>
 
@@ -91,17 +91,17 @@ const PollTemplateIcon: React.FC<PollTemplateIconProps> = ({ templateName }) => 
                         }}
                         transition={{ duration: 4, repeat: Infinity }}
                     >
-                        <MousePointer size={24} strokeWidth={thinStroke} fill="rgba(0,0,0,0.1)" />
+                        <MousePointer size={32} strokeWidth={thinStroke} fill="rgba(0,0,0,0.1)" />
                     </motion.div>
                 </div>
             );
 
         case "Lunch Poll":
             return (
-                <div className="relative w-28 h-28 flex items-center justify-center">
+                <div className="relative w-40 h-40 flex items-center justify-center">
                     {/* Central Plate */}
                     <div className="relative z-10 bg-white rounded-full p-3 shadow-sm border border-orange-100">
-                        <Utensils size={32} className="text-orange-500" strokeWidth={thinStroke} />
+                        <Utensils size={48} className="text-orange-500" strokeWidth={thinStroke} />
                     </div>
 
                     {/* Orbiting Food Items */}
@@ -118,9 +118,9 @@ const PollTemplateIcon: React.FC<PollTemplateIconProps> = ({ templateName }) => 
                                 animate={{ rotate: -360 }} // Counter-rotate to keep icon upright
                                 transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
                             >
-                                {i === 0 && <Pizza size={24} className="text-orange-400" strokeWidth={thinStroke} />}
-                                {i === 1 && <Coffee size={24} className="text-brown-400" strokeWidth={thinStroke} />}
-                                {i === 2 && <Sandwich size={24} className="text-green-500" strokeWidth={thinStroke} />}
+                                {i === 0 && <Pizza size={32} className="text-orange-400" strokeWidth={thinStroke} />}
+                                {i === 1 && <Coffee size={32} className="text-brown-400" strokeWidth={thinStroke} />}
+                                {i === 2 && <Sandwich size={32} className="text-green-500" strokeWidth={thinStroke} />}
                             </motion.div>
                         </motion.div>
                     ))}
@@ -136,25 +136,25 @@ const PollTemplateIcon: React.FC<PollTemplateIconProps> = ({ templateName }) => 
 
         case "Event Theme":
             return (
-                <div className="relative w-28 h-28 flex items-center justify-center">
+                <div className="relative w-40 h-40 flex items-center justify-center">
                     {/* Party Popper */}
                     <motion.div
                         animate={{ rotate: [0, -15, 0, -10, 0] }}
                         transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                         className="relative z-10 origin-bottom-left"
                     >
-                        <PartyPopper size={48} className="text-indigo-600" strokeWidth={thinStroke} />
+                        <PartyPopper size={64} className="text-indigo-600" strokeWidth={thinStroke} />
                     </motion.div>
 
                     {/* Confetti Particles */}
                     {[...Array(6)].map((_, i) => (
                         <motion.div
                             key={i}
-                            className={`absolute w-1.5 h-1.5 rounded-full ${['bg-red-400', 'bg-blue-400', 'bg-yellow-400', 'bg-green-400'][i % 4]}`}
+                            className={`absolute w-2 h-2 rounded-full ${['bg-red-400', 'bg-blue-400', 'bg-yellow-400', 'bg-green-400'][i % 4]}`}
                             initial={{ x: 0, y: 0, opacity: 0 }}
                             animate={{
-                                x: Math.random() * 60 - 10,
-                                y: Math.random() * -60 - 10,
+                                x: Math.random() * 80 - 10,
+                                y: Math.random() * -80 - 10,
                                 opacity: [1, 1, 0],
                                 scale: [0, 1, 0]
                             }}
@@ -174,7 +174,7 @@ const PollTemplateIcon: React.FC<PollTemplateIconProps> = ({ templateName }) => 
                         animate={{ y: [0, -10, 0], opacity: [0, 1, 0] }}
                         transition={{ duration: 2, repeat: Infinity, delay: 0.5 }}
                     >
-                        <Music size={16} strokeWidth={thinStroke} />
+                        <Music size={22} strokeWidth={thinStroke} />
                     </motion.div>
                 </div>
             );

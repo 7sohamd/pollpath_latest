@@ -16,7 +16,7 @@ const FooterMain: React.FC = () => {
                         </p>
                         <div className="flex gap-4">
                             {[Twitter, Instagram, Linkedin].map((Icon, i) => (
-                                <a key={i} href="#" className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-brand-900 hover:text-white transition-colors">
+                                <a key={i} href="https://portfolio-peach-iota-67.vercel.app/" className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-brand-900 hover:text-white transition-colors">
                                     <Icon size={14} />
                                 </a>
                             ))}

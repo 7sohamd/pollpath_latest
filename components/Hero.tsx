@@ -22,7 +22,7 @@ const Hero: React.FC<HeroProps> = ({ onGetStarted }) => {
           preload="auto"
           className="absolute inset-0 w-full h-full object-cover"
         >
-        {/* soham */}
+          {/* soham */}
           <source src="/hero.mp4" type="video/mp4" />
         </video>
         {/* Overlay for readability */}
@@ -85,7 +85,7 @@ const Hero: React.FC<HeroProps> = ({ onGetStarted }) => {
           <Button
             size="lg"
             onClick={onGetStarted}
-            className="button-highlighted-shadow px-8 py-4 text-lg bg-brand-900 hover:bg-black text-white border-0 rounded-xl group"
+            className="button-highlighted-shadow px-4 py-2 text-base bg-brand-900 hover:bg-black text-white border-0 rounded-xl group"
           >
             Create Poll
             <ArrowUpRight className="ml-2 w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />

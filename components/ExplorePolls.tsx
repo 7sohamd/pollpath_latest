@@ -6,10 +6,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { pollService } from '../services/pollService';
 import AuthModal from './AuthModal';
 import toast from 'react-hot-toast';
-import LoadingState from './ExplorePolls/LoadingState';
-import SearchBar from './ExplorePolls/SearchBar';
-import PollSection from './ExplorePolls/PollSection';
-import EmptyState from './ExplorePolls/EmptyState';
+import SkeletonFeed from './ExplorePolls/SkeletonFeed';
+import Sidebar from './ExplorePolls/Sidebar';
+import FeedCard from './ExplorePolls/FeedCard';
+import BentoGrid from './ExplorePolls/BentoGrid';
+import InfiniteScrollFeed from './ExplorePolls/InfiniteScrollFeed';
 import BottomCTA from './ExplorePolls/BottomCTA';
 
 interface ExplorePollsProps {
@@ -21,11 +22,12 @@ const ExplorePolls: React.FC<ExplorePollsProps> = ({ onCreate, sharedPollId }) =
   const [polls, setPolls] = useState<Poll[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'trending' | 'newest' | 'closing'>('trending');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [showPrivatePolls, setShowPrivatePolls] = useState(false);
+  const [showSavedPolls, setShowSavedPolls] = useState(false);
+  const [savedPollIds, setSavedPollIds] = useState<string[]>([]);
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [displayCount, setDisplayCount] = useState(12);
 
   const { user, isPro } = useAuth();
 
@@ -49,15 +51,24 @@ const ExplorePolls: React.FC<ExplorePollsProps> = ({ onCreate, sharedPollId }) =
     fetchPolls();
   }, []);
 
-  // Scroll detection for compact search bar
+  // Load saved polls from localStorage
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 100);
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    const saved = localStorage.getItem('savedPolls');
+    if (saved) {
+      setSavedPollIds(JSON.parse(saved));
+    }
   }, []);
+
+  // Save poll toggle
+  const handleSavePoll = (pollId: string) => {
+    setSavedPollIds(prev => {
+      const newSaved = prev.includes(pollId)
+        ? prev.filter(id => id !== pollId)
+        : [...prev, pollId];
+      localStorage.setItem('savedPolls', JSON.stringify(newSaved));
+      return newSaved;
+    });
+  };
 
   // Handle shared poll link - auto-open poll modal
   useEffect(() => {
@@ -83,12 +94,12 @@ const ExplorePolls: React.FC<ExplorePollsProps> = ({ onCreate, sharedPollId }) =
       await pollService.votePoll(pollId, optionIndex, user.uid);
 
       // Update local state
-        const freshPolls = await pollService.getPolls();
+      const freshPolls = await pollService.getPolls();
       setPolls(freshPolls);
       // Update the currently selected poll in the modal
       if (selectedPoll && selectedPoll.id === pollId) {
         const updatedPoll = freshPolls.find(p => p.id === pollId);
-          if (updatedPoll) {
+        if (updatedPoll) {
           setSelectedPoll(updatedPoll);
         }
       }
@@ -115,105 +126,179 @@ const ExplorePolls: React.FC<ExplorePollsProps> = ({ onCreate, sharedPollId }) =
     setIsModalOpen(true);
   };
 
-  // Filter Logic
-  const publicPolls = polls.filter(p => p.visibility === 'public' && p.status !== 'deleted');
-  const myPrivatePolls = user
-    ? polls.filter(p => p.visibility === 'unlisted' && p.creatorId === user.uid && p.status !== 'deleted')
-    : [];
+  // Filter and Category Logic
+  let filteredPolls = polls.filter(p => p.status !== 'deleted');
 
-  // Filter Logic - apply search only to public polls
-  const displayedPolls = publicPolls.filter(p =>
-    p.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  // Apply saved filter
+  if (showSavedPolls) {
+    filteredPolls = filteredPolls.filter(p => savedPollIds.includes(p.id!));
+  } else {
+    // Apply visibility filter (only when not showing saved)
+    if (showPrivatePolls && isPro) {
+      filteredPolls = filteredPolls.filter(p => p.visibility === 'unlisted' && p.creatorId === user?.uid);
+    } else {
+      filteredPolls = filteredPolls.filter(p => p.visibility === 'public');
+    }
+  }
+
+  // Apply category filter
+  if (activeCategory) {
+    filteredPolls = filteredPolls.filter(p =>
+      p.tags && p.tags.some(tag => tag.toLowerCase() === activeCategory.toLowerCase())
+    );
+  }
+
+  // Apply sort filter
+  const sortedPolls = [...filteredPolls].sort((a, b) => {
+    if (filter === 'trending') {
+      const aVotes = a.options.reduce((sum, opt) => sum + opt.votesCount, 0);
+      const bVotes = b.options.reduce((sum, opt) => sum + opt.votesCount, 0);
+      return bVotes - aVotes;
+    } else if (filter === 'newest') {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    } else if (filter === 'closing') {
+      if (!a.closesAt) return 1;
+      if (!b.closesAt) return -1;
+      return new Date(a.closesAt).getTime() - new Date(b.closesAt).getTime();
+    }
+    return 0;
+  });
+
+  // Infinite scroll pagination
+  const displayedPolls = sortedPolls.slice(0, displayCount);
+  const hasMore = displayedPolls.length < sortedPolls.length;
+
+  const loadMore = () => {
+    setDisplayCount(prev => prev + 12);
+  };
 
   // Show loading state
   if (loading) {
-    return <LoadingState />;
+    return (
+      <div className="min-h-screen bg-brand-50 pt-24 pb-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex gap-8">
+            {/* Sidebar - Show even during loading */}
+            <Sidebar
+              activeFilter={filter}
+              onFilterChange={setFilter}
+              activeCategory={activeCategory}
+              onCategoryChange={setActiveCategory}
+              showPrivatePolls={showPrivatePolls}
+              onPrivateToggle={() => setShowPrivatePolls(!showPrivatePolls)}
+              showSavedPolls={showSavedPolls}
+              onSavedToggle={() => setShowSavedPolls(!showSavedPolls)}
+              savedCount={savedPollIds.length}
+              isPro={isPro || false}
+            />
+
+            {/* Main Feed with Skeletons */}
+            <main className="flex-1 min-w-0">
+              <div className="mb-8">
+                <h2 className="text-3xl font-serif font-medium text-brand-900 mb-2">Loading Polls...</h2>
+                <div className="h-4 bg-gray-200 rounded w-32 animate-pulse" />
+              </div>
+              <SkeletonFeed count={12} />
+            </main>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-brand-50 pt-32 pb-20 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-
-        {/* Header */}
-        <div className="text-center mb-16">
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-5xl md:text-6xl font-serif font-medium text-brand-900 mb-6 tracking-tight"
-          >
-            Explore live polls
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-lg text-gray-500 max-w-xl mx-auto font-light"
-          >
-            See what the world is deciding today. Search, filter, and vote on public polls.
-          </motion.p>
-        </div>
-
-        {/* Search & Filter Toolbar */}
-        <SearchBar
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          isScrolled={isScrolled}
-          filter={filter}
-          onFilterChange={setFilter}
-          isFilterOpen={isFilterOpen}
-          onFilterToggle={() => setIsFilterOpen(!isFilterOpen)}
-          isSearchFocused={isSearchFocused}
-          onSearchFocus={setIsSearchFocused}
-        />
-
-        {/* My Private Polls Section - Pro Users Only */}
-        {isPro && myPrivatePolls.length > 0 && !searchQuery && (
-          <PollSection
-            title="My Private Polls"
-            polls={myPrivatePolls}
-            onPollClick={openPoll}
-            onVote={handleVote}
-            badge={<span className="text-xs font-bold px-2 py-1 bg-purple-100 text-purple-700 rounded-full">PRO</span>}
-            showPrivateBadge
+    <div className="min-h-screen bg-brand-50 pt-24 pb-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Two-Column Layout: Sidebar + Feed */}
+        <div className="flex gap-8">
+          {/* Left Sidebar */}
+          <Sidebar
+            activeFilter={filter}
+            onFilterChange={setFilter}
+            activeCategory={activeCategory}
+            onCategoryChange={setActiveCategory}
+            showPrivatePolls={showPrivatePolls}
+            onPrivateToggle={() => setShowPrivatePolls(!showPrivatePolls)}
+            showSavedPolls={showSavedPolls}
+            onSavedToggle={() => setShowSavedPolls(!showSavedPolls)}
+            savedCount={savedPollIds.length}
+            isPro={isPro || false}
           />
-        )}
 
-        {/* Trending Section */}
-        {filter === 'trending' && !searchQuery && (
-          <PollSection
-            title="Trending Now"
-            polls={publicPolls.slice(0, 3)}
-            onPollClick={openPoll}
-            onVote={handleVote}
-          />
-        )}
+          {/* Main Feed */}
+          <main className="flex-1 min-w-0">
+            {/* Feed Header */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="mb-8"
+            >
+              <h2 className="text-3xl font-serif font-medium text-brand-900 mb-2">
+                {showSavedPolls
+                  ? 'Saved Polls'
+                  : activeCategory
+                    ? `${activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)} Polls`
+                    : showPrivatePolls && isPro
+                      ? 'My Private Polls'
+                      : filter === 'trending'
+                        ? 'Trending Polls'
+                        : filter === 'newest'
+                          ? 'Latest Polls'
+                          : 'Closing Soon'}
+              </h2>
+              <p className="text-gray-500">
+                {displayedPolls.length} poll{displayedPolls.length !== 1 ? 's' : ''} available
+              </p>
+            </motion.div>
 
-        {/* Main Feed */}
-        <div>
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-1 h-8 bg-gray-200 rounded-full" />
-            <h2 className="text-2xl font-serif font-medium text-brand-900">
-              {searchQuery ? 'Search Results' : 'All Public Polls'}
-            </h2>
-          </div>
+            {/* Bento Grid Feed with Infinite Scroll */}
+            {displayedPolls.length > 0 ? (
+              <InfiniteScrollFeed
+                hasMore={hasMore}
+                onLoadMore={loadMore}
+                loading={false}
+              >
+                <BentoGrid>
+                  {displayedPolls.map((poll, index) => (
+                    <FeedCard
+                      key={poll.id}
+                      poll={poll}
+                      onClick={() => openPoll(poll)}
+                      onSave={handleSavePoll}
+                      isSaved={savedPollIds.includes(poll.id!)}
+                      index={index}
+                      featured={filter === 'trending' && index < 3}
+                    />
+                  ))}
+                </BentoGrid>
+              </InfiniteScrollFeed>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center py-20"
+              >
+                <p className="text-gray-400 text-lg mb-6">
+                  {activeCategory
+                    ? `No polls found in ${activeCategory}`
+                    : 'No polls available'}
+                </p>
+                <button
+                  onClick={onCreate}
+                  className="px-6 py-3 bg-brand-900 text-white rounded-xl hover:bg-black transition-colors"
+                >
+                  Create the first poll
+                </button>
+              </motion.div>
+            )}
 
-          {displayedPolls.length > 0 ? (
-            <PollSection
-              title=""
-              polls={displayedPolls}
-              onPollClick={openPoll}
-              onVote={handleVote}
-            />
-          ) : (
-            <EmptyState onCreate={onCreate} />
-          )}
+            {/* Bottom CTA */}
+            <div className="mt-16">
+              <BottomCTA onCreate={onCreate} />
+            </div>
+          </main>
         </div>
-
-        {/* Bottom CTA */}
-        <BottomCTA onCreate={onCreate} />
 
         {/* Modal */}
         <PollModal

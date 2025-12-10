@@ -1,14 +1,23 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Calendar, Lightbulb } from 'lucide-react';
 import { Poll } from '../../types';
+import Button from '../ui/Button';
 
 interface PollPreviewProps {
     formData: Partial<Poll>;
+    showBuildButton?: boolean;
+    onBuildClick?: () => void;
 }
 
-const PollPreview: React.FC<PollPreviewProps> = ({ formData }) => {
+const PollPreview: React.FC<PollPreviewProps> = ({ formData, showBuildButton = false, onBuildClick }) => {
     return (
-        <div className="lg:col-span-4 hidden lg:block">
+        <motion.div
+            className="lg:col-span-4 hidden lg:block"
+            initial={{ opacity: 0, filter: 'blur(10px)' }}
+            animate={{ opacity: 1, filter: 'blur(0px)' }}
+            transition={{ duration: 0.6, delay: 0.5 }}
+        >
             <div className="sticky top-28 space-y-4">
                 {/* Preview Header */}
                 <div className="flex items-center justify-between px-1">
@@ -21,11 +30,24 @@ const PollPreview: React.FC<PollPreviewProps> = ({ formData }) => {
                 </div>
 
                 {/* Preview Card */}
-                <div className="bg-white rounded-[32px] p-6 shadow-2xl shadow-gray-200/50 border border-gray-100 relative overflow-hidden">
+                <div
+                    className="bg-white rounded-[32px] p-6 border border-gray-100 relative overflow-hidden"
+                    style={{
+                        boxShadow: 'inset 0 12px 0 0 rgba(255, 255, 255, 1.0)'
+                    }}
+                >
+                    {/* Subtle diagonal gradient overlay for 3D effect */}
+                    <div
+                        className="absolute inset-0 pointer-events-none rounded-[32px]"
+                        style={{
+                            background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.12) 0%, rgba(17, 24, 39, 0.06) 35%, rgba(255, 255, 255, 0.06) 65%, rgba(255, 255, 255, 0.10) 100%)'
+                        }}
+                    />
+
                     {/* Decorative bg element */}
                     <div className="absolute -top-10 -right-10 w-32 h-32 bg-brand-50 rounded-full blur-2xl pointer-events-none" />
 
-                    <div className="relative z-10">
+                    <div className="relative z-20">
                         {/* Poll Creator */}
                         <div className="flex items-center gap-3 mb-5">
                             <div className="w-9 h-9 rounded-full bg-brand-900 text-white flex items-center justify-center text-xs font-bold shadow-md">
@@ -71,6 +93,18 @@ const PollPreview: React.FC<PollPreviewProps> = ({ formData }) => {
                     </div>
                 </div>
 
+
+                {/* Build Your Own Poll Button - Only shown in templates view */}
+                {showBuildButton && onBuildClick && (
+                    <Button
+                        variant="secondary"
+                        onClick={onBuildClick}
+                        className="w-full py-3 text-base font-medium shadow-md hover:shadow-lg transition-all"
+                    >
+                        Build your own Poll
+                    </Button>
+                )}
+
                 {/* Pro Tip */}
                 <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 flex gap-3 items-start">
                     <div className="mt-0.5 p-1 bg-blue-100 rounded-full text-blue-600">
@@ -81,7 +115,7 @@ const PollPreview: React.FC<PollPreviewProps> = ({ formData }) => {
                     </p>
                 </div>
             </div>
-        </div>
+        </motion.div>
     );
 };
 

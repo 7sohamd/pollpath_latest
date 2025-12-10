@@ -28,7 +28,7 @@ const PollModalHeader: React.FC<PollModalHeaderProps> = ({
                         {poll.identity === 'anonymous' ? 'Anonymous' : (poll.creatorName || 'Poll Creator')}
                     </div>
                     <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <span>Just now</span>
+                        <span>{new Date(poll.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                         <span>•</span>
                         <span className="uppercase tracking-wide font-medium">{poll.visibility}</span>
                     </div>
