@@ -175,7 +175,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             {/* Scrollbar styling */}
-            <style jsx>{`
+            <style>{`
         aside::-webkit-scrollbar {
           width: 6px;
         }
