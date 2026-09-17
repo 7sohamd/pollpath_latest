@@ -33,7 +33,8 @@ export default async function handler(req, res) {
             'should', 'would', 'could', 'can', 'will', 'shall',
             'might', 'ought', 'need', 'want'];
 
-        const allWords = message
+        const cleanMessage = message.replace(/[^\w\s]/g, ' ');
+        const allWords = cleanMessage
             .toLowerCase()
             .split(/\s+/)
             .filter(word => word.length > 2 && !stopWords.includes(word));

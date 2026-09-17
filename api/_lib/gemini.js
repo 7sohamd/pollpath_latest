@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 let genAI = null;
 let model = null;
+let embedModel = null;
 
 /**
  * Initialize Gemini AI SDK
@@ -9,13 +10,14 @@ let model = null;
  */
 export function initializeGemini() {
     if (genAI && model) {
-        return { genAI, model };
+        return { genAI, model, embedModel };
     }
 
     try {
         if (process.env.GEMINI_API_KEY) {
             genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
             model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+            embedModel = genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
             console.log('✅ Gemini AI initialized successfully');
         } else {
             console.log('⚠️  Gemini API key not found');
@@ -24,7 +26,7 @@ export function initializeGemini() {
         console.error('⚠️  Failed to initialize Gemini AI:', error.message);
     }
 
-    return { genAI, model };
+    return { genAI, model, embedModel };
 }
 
 /**
@@ -36,4 +38,14 @@ export function getGeminiModel() {
         initializeGemini();
     }
     return model;
+}
+
+/**
+ * Get Gemini embedding model instance
+ */
+export function getGeminiEmbeddingModel() {
+    if (!embedModel) {
+        initializeGemini();
+    }
+    return embedModel;
 }

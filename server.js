@@ -11,7 +11,7 @@ import cron from 'node-cron';
 dotenv.config({ path: '.env.local' });
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors());
@@ -20,6 +20,7 @@ app.use(express.json());
 // Initialize Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+const embedModel = genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
 
 // Initialize Razorpay
 let razorpay = null;
@@ -59,134 +60,260 @@ try {
 
         // Log poll count on startup
         db.collection('polls').count().get().then(snapshot => {
-            console.log(`📊 Firestore: ${snapshot.data().count} total polls in database`);
-        }).catch(err => console.error('Failed to count polls:', err.message));
+            console.log(`📊 Firestore Admin: ${snapshot.data().count} total polls in database`);
+        }).catch(err => {
+            console.warn('⚠️  Firestore Admin query failed (will use Firestore REST fallback):', err.message);
+        });
     } else {
-        console.log('⚠️  Firebase Admin credentials not found - poll search will be disabled');
+        console.log('ℹ️  Firebase Admin credentials not provided - using Firestore REST API');
     }
 } catch (error) {
-    console.error('⚠️  Failed to initialize Firebase Admin:', error.message);
-    console.log('   Poll search will be disabled. The AI will still work with web search.');
+    console.warn('⚠️  Firebase Admin initialization failed (using Firestore REST API):', error.message);
 }
 
+// In-memory cache for published polls
+let cachedPolls = null;
+let lastPollsFetchTime = 0;
+const POLLS_CACHE_TTL = 30000; // 30 seconds
 
-// Helper function to search polls by keywords
-async function searchSimilarPolls(keywords, originalQuery = '') {
-    // Minimum score threshold to be considered relevant
-    // Requires at least 2 strong content word matches to avoid weak/irrelevant results
-    // Score 10 = 2 words in question (5+5) or 1 question + 1 tag + options (5+3+2)
-    const MIN_RELEVANCE_SCORE = 10;
+// In-memory cache for question embeddings
+const embeddingCache = new Map();
 
-    // If Firebase Admin is not initialized, return empty array
-    if (!db) {
-        console.log('⚠️  Poll search skipped - Firebase Admin not initialized');
-        return [];
+// Helper to calculate cosine similarity
+function cosineSimilarity(vecA, vecB) {
+    if (!vecA || !vecB || vecA.length !== vecB.length) return 0;
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+    for (let i = 0; i < vecA.length; i++) {
+        dotProduct += vecA[i] * vecB[i];
+        normA += vecA[i] * vecA[i];
+        normB += vecB[i] * vecB[i];
+    }
+    const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+    return denominator === 0 ? 0 : dotProduct / denominator;
+}
+
+// Helper to fetch question embedding
+async function getQuestionEmbedding(text) {
+    if (!text || !embedModel) return null;
+    const normalized = text.trim().toLowerCase();
+    if (embeddingCache.has(normalized)) return embeddingCache.get(normalized);
+    try {
+        const res = await embedModel.embedContent(text);
+        const vector = res.embedding?.values || null;
+        if (vector) embeddingCache.set(normalized, vector);
+        return vector;
+    } catch {
+        return null;
+    }
+}
+
+// Helper to parse Firestore REST documents
+function parseFirestoreValue(val) {
+    if (!val) return null;
+    if ('stringValue' in val) return val.stringValue;
+    if ('integerValue' in val) return parseInt(val.integerValue, 10);
+    if ('doubleValue' in val) return parseFloat(val.doubleValue);
+    if ('booleanValue' in val) return val.booleanValue;
+    if ('timestampValue' in val) return new Date(val.timestampValue);
+    if ('nullValue' in val) return null;
+    if ('arrayValue' in val) return (val.arrayValue.values || []).map(parseFirestoreValue);
+    if ('mapValue' in val) {
+        const res = {};
+        for (const [k, v] of Object.entries(val.mapValue.fields || {})) {
+            res[k] = parseFirestoreValue(v);
+        }
+        return res;
+    }
+    return null;
+}
+
+// Fetch all published public polls with fallback
+async function fetchPublishedPublicPolls() {
+    const now = Date.now();
+    if (cachedPolls && (now - lastPollsFetchTime < POLLS_CACHE_TTL)) {
+        return cachedPolls;
     }
 
+    // Try Firebase Admin first
+    if (db) {
+        try {
+            const pollsRef = db.collection('polls');
+            const querySnapshot = await pollsRef
+                .where('status', '==', 'published')
+                .where('visibility', '==', 'public')
+                .orderBy('createdAt', 'desc')
+                .limit(50)
+                .get();
+
+            const allPolls = [];
+            querySnapshot.forEach((doc) => {
+                allPolls.push({ id: doc.id, ...doc.data() });
+            });
+
+            if (allPolls.length > 0) {
+                cachedPolls = allPolls;
+                lastPollsFetchTime = now;
+                return allPolls;
+            }
+        } catch (adminErr) {
+            console.warn('⚠️  Firestore Admin fetch failed, falling back to REST API:', adminErr.message);
+        }
+    }
+
+    // Fallback: Firestore REST API using client API Key & Project ID
+    const projectId = process.env.VITE_FIREBASE_PROJECT_ID;
+    const apiKey = process.env.VITE_FIREBASE_API_KEY;
+    if (projectId && apiKey) {
+        try {
+            const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/polls?key=${apiKey}&pageSize=100`;
+            const response = await fetch(url);
+            if (response.ok) {
+                const data = await response.json();
+                const documents = data.documents || [];
+                const restPolls = documents.map(doc => {
+                    const id = doc.name.split('/').pop();
+                    const fields = doc.fields || {};
+                    const poll = { id };
+                    for (const [k, v] of Object.entries(fields)) {
+                        poll[k] = parseFirestoreValue(v);
+                    }
+                    return poll;
+                }).filter(p => {
+                    const status = p.status || 'published';
+                    const visibility = p.visibility || 'public';
+                    return status === 'published' && visibility === 'public';
+                });
+
+                cachedPolls = restPolls;
+                lastPollsFetchTime = now;
+                console.log(`✅ Loaded ${restPolls.length} published polls via Firestore REST API`);
+                return restPolls;
+            }
+        } catch (restErr) {
+            console.error('❌ Firestore REST API fetch failed:', restErr.message);
+        }
+    }
+
+    return [];
+}
+
+// Helper function to search polls using hybrid keyword and semantic search
+async function searchSimilarPolls(keywords, originalQuery = '') {
     try {
-        const pollsRef = db.collection('polls');
+        const allPolls = await fetchPublishedPublicPolls();
+        if (!allPolls || allPolls.length === 0) {
+            console.log('⚠️  No published polls available in database');
+            return [];
+        }
 
-        // Query for published, public polls
-        const querySnapshot = await pollsRef
-            .where('status', '==', 'published')
-            .where('visibility', '==', 'public')
-            .orderBy('createdAt', 'desc')
-            .limit(50)
-            .get();
+        console.log(`📚 Searching across ${allPolls.length} published polls from Firestore`);
 
-        const allPolls = [];
-        querySnapshot.forEach((doc) => {
-            allPolls.push({ id: doc.id, ...doc.data() });
-        });
+        // Clean and prepare query text
+        const cleanQuery = (originalQuery || keywords.join(' '))
+            .replace(/[^\w\s]/g, ' ')
+            .toLowerCase()
+            .trim();
+        const queryWords = cleanQuery.split(/\s+/).filter(w => w.length > 2);
 
-        console.log(`📚 Checking ${allPolls.length} published polls from Firestore`);
+        // Deduplicate polls by question (keep poll with highest totalVotes)
+        const dedupedMap = new Map();
+        for (const poll of allPolls) {
+            const key = (poll.question || '').trim().toLowerCase();
+            const existing = dedupedMap.get(key);
+            if (!existing || (poll.totalVotes || 0) > (existing.totalVotes || 0)) {
+                dedupedMap.set(key, poll);
+            }
+        }
+        const uniquePolls = Array.from(dedupedMap.values());
 
-        // Filter and score polls based on CONTENT word matches only
-        const scoredPolls = allPolls.map(poll => {
+        // Get query embedding for semantic search
+        let queryEmbedding = null;
+        try {
+            queryEmbedding = await getQuestionEmbedding(originalQuery || cleanQuery);
+        } catch {
+            queryEmbedding = null;
+        }
+
+        // Score polls using hybrid approach (exact match + keyword scoring + semantic similarity)
+        const scoredPolls = [];
+
+        for (const poll of uniquePolls) {
             let score = 0;
-            let contentMatches = [];
-            const lowerQuestion = poll.question.toLowerCase();
-            const pollTags = (poll.tags || []).map(t => t.toLowerCase());
-            const lowerKeywords = keywords.map(k => k.toLowerCase());
+            const contentMatches = [];
+            const lowerQuestion = (poll.question || '').toLowerCase();
+            const cleanPollQuestion = lowerQuestion.replace(/[^\w\s]/g, ' ').trim();
+            const pollTags = (poll.tags || []).map(t => String(t).toLowerCase());
 
-            // Check question matches (content words only - higher weight)
-            lowerKeywords.forEach(keyword => {
-                if (lowerQuestion.includes(keyword)) {
-                    score += 5;  // Higher score for content word matches
-                    contentMatches.push(`question:${keyword}`);
+            // 1. Exact or near-exact question match bonus
+            if (cleanPollQuestion === cleanQuery || cleanPollQuestion.includes(cleanQuery) || cleanQuery.includes(cleanPollQuestion)) {
+                score += 25;
+                contentMatches.push('exact_or_substring_match');
+            }
+
+            // 2. Content word keyword matches
+            keywords.forEach(keyword => {
+                const cleanKeyword = keyword.replace(/[^\w\s]/g, '').toLowerCase().trim();
+                if (!cleanKeyword) return;
+
+                if (lowerQuestion.includes(cleanKeyword)) {
+                    score += 5;
+                    contentMatches.push(`question:${cleanKeyword}`);
                 }
-            });
-
-            // Check tag matches (content words)
-            pollTags.forEach(tag => {
-                lowerKeywords.forEach(keyword => {
-                    if (tag.includes(keyword) || keyword.includes(tag)) {
-                        score += 3;  // Medium score for tag matches
-                        contentMatches.push(`tag:${keyword}`);
+                pollTags.forEach(tag => {
+                    if (tag.includes(cleanKeyword) || cleanKeyword.includes(tag)) {
+                        score += 3;
+                        contentMatches.push(`tag:${cleanKeyword}`);
+                    }
+                });
+                (poll.options || []).forEach(option => {
+                    const optLabel = String(option.label || '').toLowerCase();
+                    if (optLabel.includes(cleanKeyword)) {
+                        score += 2;
+                        contentMatches.push(`option:${cleanKeyword}`);
                     }
                 });
             });
 
-            // Check option matches (content words)
-            (poll.options || []).forEach(option => {
-                const lowerOption = option.label.toLowerCase();
-                lowerKeywords.forEach(keyword => {
-                    if (lowerOption.includes(keyword)) {
-                        score += 2;  // Lower score for option matches
-                        contentMatches.push(`option:${keyword}`);
+            // 3. Fallback word overlap
+            const matchedWordCount = queryWords.filter(w => lowerQuestion.includes(w)).length;
+            if (queryWords.length > 0 && matchedWordCount >= Math.ceil(queryWords.length * 0.5)) {
+                score += 10;
+                contentMatches.push(`word_overlap:${matchedWordCount}/${queryWords.length}`);
+            }
+
+            // 4. Semantic similarity via Gemini embeddings
+            let sim = 0;
+            if (queryEmbedding && poll.question) {
+                const pollEmbedding = await getQuestionEmbedding(poll.question);
+                if (pollEmbedding) {
+                    sim = cosineSimilarity(queryEmbedding, pollEmbedding);
+                    if (sim >= 0.65) {
+                        const simBoost = Math.round(sim * 20);
+                        score += simBoost;
+                        contentMatches.push(`semantic_similarity:${sim.toFixed(2)} (+${simBoost})`);
                     }
-                });
-            });
+                }
+            }
 
-            return { ...poll, score, contentMatches };
-        });
+            // Require minimum relevance (score >= 10 OR high semantic similarity >= 0.70)
+            if (score >= 10 || sim >= 0.70) {
+                scoredPolls.push({ ...poll, score, sim, contentMatches });
+            }
+        }
 
-        // Filter: require minimum score for relevance
-        // This prevents showing polls that only weakly match (e.g., just one word)
-        let topPolls = scoredPolls
-            .filter(p => p.score >= MIN_RELEVANCE_SCORE)
+        const topPolls = scoredPolls
             .sort((a, b) => b.score - a.score)
             .slice(0, 5);
 
-        // Log matching results with content word details
         if (topPolls.length > 0) {
-            console.log(`✨ Content-based matching found ${topPolls.length} polls (min score: ${MIN_RELEVANCE_SCORE}):`);
+            console.log(`✨ Hybrid search found ${topPolls.length} relevant polls:`);
             topPolls.forEach((poll, idx) => {
                 console.log(`   ${idx + 1}. "${poll.question}" (score: ${poll.score}, matches: ${poll.contentMatches.join(', ')})`);
             });
         } else {
-            const weakMatches = scoredPolls.filter(p => p.score > 0 && p.score < MIN_RELEVANCE_SCORE);
-            if (weakMatches.length > 0) {
-                console.log(`⚠️  Found ${weakMatches.length} polls with weak matches (below threshold of ${MIN_RELEVANCE_SCORE}):`);
-                weakMatches.slice(0, 3).forEach((poll, idx) => {
-                    console.log(`   - "${poll.question}" (score: ${poll.score}, matches: ${poll.contentMatches.join(', ')})`);
-                });
-                console.log(`   Not showing these - trying fallback full-text search instead...`);
-            } else {
-                console.log(`⚠️  No polls matched content words. Trying fallback full-text search...`);
-            }
-        }
-
-        // FALLBACK: If no keyword matches, try full-text substring search
-        if (topPolls.length === 0 && originalQuery) {
-            const queryLower = originalQuery.toLowerCase().trim();
-            const fullTextMatches = allPolls.filter(poll => {
-                const questionLower = poll.question.toLowerCase();
-                // Check for substantial overlap (at least 50% of query words appear in question)
-                const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
-                const matchCount = queryWords.filter(word => questionLower.includes(word)).length;
-                return matchCount >= Math.ceil(queryWords.length * 0.5);
-            });
-
-            if (fullTextMatches.length > 0) {
-                console.log(`✨ Full-text search found ${fullTextMatches.length} polls:`);
-                fullTextMatches.forEach((poll, idx) => {
-                    console.log(`   ${idx + 1}. "${poll.question}"`);
-                });
-                topPolls = fullTextMatches.slice(0, 5);
-            } else {
-                console.log(`❌ No polls found with full-text search either`);
-            }
+            console.log(`❌ No polls matched query: "${originalQuery}"`);
         }
 
         return topPolls;
@@ -195,6 +322,7 @@ async function searchSimilarPolls(keywords, originalQuery = '') {
         return [];
     }
 }
+
 
 // Helper function to extract poll structure from natural language query
 async function extractPollStructure(query) {
@@ -306,7 +434,8 @@ app.post('/api/copilot', async (req, res) => {
             'should', 'would', 'could', 'can', 'will', 'shall',
             'might', 'ought', 'need', 'want'];
 
-        const allWords = message
+        const cleanMessage = message.replace(/[^\w\s]/g, ' ');
+        const allWords = cleanMessage
             .toLowerCase()
             .split(/\s+/)
             .filter(word => word.length > 2 && !stopWords.includes(word));
